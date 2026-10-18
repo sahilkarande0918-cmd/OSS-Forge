@@ -180,6 +180,78 @@ def cmd_analyze(args) -> int:
     return EXIT_OK
 
 
+# ----------------------------------------------------------------------------------- solve / verify / pr
+STATUS_EXIT = {"VERIFIED": EXIT_OK, "PARTIALLY_VERIFIED": EXIT_OK, "INCONCLUSIVE": 3, "FAILED": EXIT_ERROR,
+               "BLOCKED": EXIT_BLOCKED}
+
+
+def _capsule_summary(capsule: dict, run_dir: Path) -> str:
+    u = capsule.get("usage", {})
+    ctx = capsule.get("context", {})
+    lines = [f"Status: {capsule['verification_status']} - {capsule['verification_summary']}",
+             f"Changed files: {', '.join(f['file'] for f in capsule.get('changed_files', [])) or 'none'}",
+             f"Gemma: {capsule['model']} | API calls {u.get('api_calls')} | tokens in/out "
+             f"{u.get('prompt_tokens')}/{u.get('output_tokens')} | context {ctx.get('context_tokens')} of "
+             f"~{ctx.get('repo_tokens_estimate')} repo tokens",
+             f"Capsule: {run_dir / 'capsule.md'}", f"PR draft: {run_dir / 'pr.md'}"]
+    return "\n".join(lines)
+
+
+def cmd_solve(args) -> int:
+    from oss_forge.ai.gemma_provider import ProviderError
+    cfg = load_config(args)
+    if not _require_key(cfg):
+        return EXIT_BLOCKED
+    forge = _forge(args, cfg)
+    try:
+        capsule = forge.solve()
+    except ProviderError as exc:
+        print(f"Gemma API error: {exc}", file=sys.stderr)
+        if forge.store:
+            forge.store.write_json("error.json", {"error": str(exc), "log": forge.log, "usage": forge.provider.usage()})
+        return EXIT_ERROR
+    out = {"run_id": forge.store.run_id, "run_dir": str(forge.store.root), "status": capsule["verification_status"],
+           "summary": capsule["verification_summary"], "usage": capsule["usage"], "log": forge.log}
+    emit(args, out, "\n".join(forge.log) + "\n\n" + _capsule_summary(capsule, forge.store.root))
+    return STATUS_EXIT.get(capsule["verification_status"], EXIT_ERROR)
+
+
+def cmd_verify(args) -> int:
+    from oss_forge.workflows.solve import RunStore, verify_run
+    cfg = load_config(args)
+    capsule = verify_run(cfg, args.run_id, Path(args.repo) if args.repo else None, args.allow_host_exec)
+    run_dir = RunStore.open(cfg.home, args.run_id).root
+    emit(args, {"run_id": args.run_id, "status": capsule["verification_status"], "checks": capsule["verification_checks"],
+                "summary": capsule["verification_summary"]}, _capsule_summary(capsule, run_dir))
+    return STATUS_EXIT.get(capsule["verification_status"], EXIT_ERROR)
+
+
+def cmd_pr(args) -> int:
+    from oss_forge.workflows.pr_builder import PRPackage, create_draft_pr
+    from oss_forge.workflows.solve import RunStore
+    cfg = load_config(args)
+    store = RunStore.open(cfg.home, args.run_id)
+    capsule, pkg = store.read_json("capsule.json"), PRPackage(**store.read_json("pr.json"))
+    meta = store.read_json("run.json")
+    if not args.create:
+        emit(args, pkg.to_dict(), f"# {pkg.title}\n\n{pkg.body}\n\n## Commands\n" + "\n".join(pkg.commands)
+             + "\n\nTo open a DRAFT PR: re-run with --create --approve (requires human approval).")
+        return EXIT_OK
+    if not args.approve:
+        print("Refusing to push or open a PR without --approve (explicit human authorization).", file=sys.stderr)
+        return EXIT_BLOCKED
+    result = create_draft_pr(Path(args.repo or meta["repo_path"]), capsule, pkg, store.root)
+    store.write_json("pr_result.json", result)
+    emit(args, result, json.dumps(result, indent=2))
+    return EXIT_OK if result.get("created") else EXIT_ERROR
+
+
+def cmd_schema(args) -> int:
+    from oss_forge.workflows.capsule import capsule_json_schema
+    print(json.dumps(capsule_json_schema(), indent=2))
+    return EXIT_OK
+
+
 # ------------------------------------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
@@ -234,6 +306,26 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("analyze", parents=[common, repo_opts, exec_opts],
                        help="Gemma 4 issue interpretation, root-cause hypotheses, regression test (+ reproduction with --execute)")
     p.set_defaults(func=cmd_analyze)
+
+    p = sub.add_parser("solve", parents=[common, repo_opts, exec_opts],
+                       help="end-to-end: analyse, reproduce, patch, verify, capsule, PR draft")
+    p.set_defaults(func=cmd_solve)
+
+    p = sub.add_parser("verify", parents=[common], help="re-run proof-of-fix verification for a stored run")
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--repo", help="target repository (default: path recorded in the run)")
+    p.add_argument("--allow-host-exec", action="store_true", help="HUMAN APPROVAL: run tests on the host")
+    p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("pr", parents=[common], help="show the PR package; --create --approve opens a DRAFT PR")
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--repo")
+    p.add_argument("--create", action="store_true", help="push a branch to origin and open a draft PR")
+    p.add_argument("--approve", action="store_true", help="explicit human authorization for --create")
+    p.set_defaults(func=cmd_pr)
+
+    p = sub.add_parser("capsule-schema", parents=[common], help="print the Proof-of-Fix capsule JSON Schema")
+    p.set_defaults(func=cmd_schema)
     return parser
 
 

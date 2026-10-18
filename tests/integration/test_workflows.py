@@ -111,15 +111,22 @@ def test_patch_guard_rules(wt):
     assert good.applied and good.changed_files == ["shopkit/reports.py"] and "+        return round_money(" in good.diff
 
 
-def test_patch_guard_tolerates_crlf_and_trailing_space(wt):
-    target = wt.path / "shopkit/utils.py"
-    target.write_bytes(target.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
-    guard = PatchGuard({"shopkit/utils.py"})
-    fix = Edit(file="shopkit/utils.py", search='    words = re.sub(r"[^a-z]+", " ", text.lower()).split()   \n',
-               replace='    words = re.sub(r"[^a-z0-9]+", " ", text.lower()).split()\n')
-    r = guard.apply(wt, PatchProposal(root_cause="x", explanation="x", edits=[fix]))
-    assert r.applied, r.violations
-    assert b'[^a-z0-9]+' in target.read_bytes() and b"\r\n" in target.read_bytes()
+def test_patch_guard_tolerates_crlf_and_trailing_space(tmp_path):
+    """A repository that commits CRLF files: edits written with LF still match and CRLF is preserved."""
+    import subprocess
+    repo = tmp_path / "crlf"
+    (repo / "pkg").mkdir(parents=True)
+    (repo / "pkg/util.py").write_bytes(b"import re\r\n\r\n\r\ndef slug(t):\r\n    return re.sub(r'[^a-z]+', '-', t)\r\n")
+    for args in (["init", "-q"], ["add", "-A"], ["-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "i"]):
+        subprocess.run(["git", "-c", "core.autocrlf=false", *args], cwd=repo, check=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    with Worktree(repo, head) as w:
+        fix = Edit(file="pkg/util.py", search="    return re.sub(r'[^a-z]+', '-', t)   \n",
+                   replace="    return re.sub(r'[^a-z0-9]+', '-', t)\n")
+        r = PatchGuard({"pkg/util.py"}).apply(w, PatchProposal(root_cause="x", explanation="x", edits=[fix]))
+        assert r.applied and (r.lines_added, r.lines_removed) == (1, 1), r.violations
+        data = (w.path / "pkg/util.py").read_bytes()
+        assert b"[^a-z0-9]+" in data and data.count(b"\r\n") == 5
 
 
 def test_forge_analyze_reproduce_and_patch_feedback_loop(shopkit_repo, config, tmp_path):

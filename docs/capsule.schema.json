@@ -1,0 +1,299 @@
+{
+  "$defs": {
+    "SourceLocation": {
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "start_line": {
+          "title": "Start Line",
+          "type": "integer"
+        },
+        "end_line": {
+          "title": "End Line",
+          "type": "integer"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "symbol",
+        "start_line",
+        "end_line"
+      ],
+      "title": "SourceLocation",
+      "type": "object"
+    },
+    "TestEvidence": {
+      "properties": {
+        "label": {
+          "description": "regression_before | regression_after | suite_before | suite_after | reproduction",
+          "title": "Label",
+          "type": "string"
+        },
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Command",
+          "type": "array"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "number"
+        },
+        "runner": {
+          "description": "docker | host | blocked",
+          "title": "Runner",
+          "type": "string"
+        },
+        "passed": {
+          "default": 0,
+          "title": "Passed",
+          "type": "integer"
+        },
+        "failed": {
+          "default": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "errors": {
+          "default": 0,
+          "title": "Errors",
+          "type": "integer"
+        },
+        "skipped": {
+          "default": 0,
+          "title": "Skipped",
+          "type": "integer"
+        },
+        "output_tail": {
+          "default": "",
+          "title": "Output Tail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "command",
+        "exit_code",
+        "duration_s",
+        "runner"
+      ],
+      "title": "TestEvidence",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tool": {
+      "default": "oss-forge 0.1.0",
+      "title": "Tool",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "repository": {
+      "additionalProperties": true,
+      "description": "id, remote, path name, branch",
+      "title": "Repository",
+      "type": "object"
+    },
+    "base_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Base Commit"
+    },
+    "issue": {
+      "additionalProperties": true,
+      "description": "source, title, url, number, labels (body excluded if very long)",
+      "title": "Issue",
+      "type": "object"
+    },
+    "verification_status": {
+      "description": "VERIFIED | PARTIALLY_VERIFIED | FAILED | INCONCLUSIVE | BLOCKED",
+      "title": "Verification Status",
+      "type": "string"
+    },
+    "verification_summary": {
+      "title": "Verification Summary",
+      "type": "string"
+    },
+    "verification_checks": {
+      "additionalProperties": true,
+      "title": "Verification Checks",
+      "type": "object"
+    },
+    "reproduction": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reproduction"
+    },
+    "root_cause": {
+      "default": "",
+      "title": "Root Cause",
+      "type": "string"
+    },
+    "hypotheses": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Hypotheses",
+      "type": "array"
+    },
+    "source_locations": {
+      "items": {
+        "$ref": "#/$defs/SourceLocation"
+      },
+      "title": "Source Locations",
+      "type": "array"
+    },
+    "regression_test": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "path and full code of the generated test",
+      "title": "Regression Test"
+    },
+    "patch": {
+      "default": "",
+      "description": "unified diff, applies with `git apply` to base_commit",
+      "title": "Patch",
+      "type": "string"
+    },
+    "changed_files": {
+      "description": "file, lines added, lines removed",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Changed Files",
+      "type": "array"
+    },
+    "test_evidence": {
+      "items": {
+        "$ref": "#/$defs/TestEvidence"
+      },
+      "title": "Test Evidence",
+      "type": "array"
+    },
+    "new_failures": {
+      "items": {
+        "type": "string"
+      },
+      "title": "New Failures",
+      "type": "array"
+    },
+    "preexisting_failures": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Preexisting Failures",
+      "type": "array"
+    },
+    "patch_attempts": {
+      "default": 0,
+      "title": "Patch Attempts",
+      "type": "integer"
+    },
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "usage": {
+      "additionalProperties": true,
+      "description": "api_calls, tokens (as reported by the API), latency",
+      "title": "Usage",
+      "type": "object"
+    },
+    "context": {
+      "additionalProperties": true,
+      "description": "context tokens vs repository size, files selected",
+      "title": "Context",
+      "type": "object"
+    },
+    "sandbox": {
+      "default": "",
+      "title": "Sandbox",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "reproduction_commands": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reproduction Commands",
+      "type": "array"
+    }
+  },
+  "required": [
+    "created_at",
+    "run_id",
+    "repository",
+    "base_commit",
+    "issue",
+    "verification_status",
+    "verification_summary",
+    "model"
+  ],
+  "title": "ProofOfFixCapsule",
+  "type": "object"
+}

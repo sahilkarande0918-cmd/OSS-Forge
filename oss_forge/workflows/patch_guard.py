@@ -22,6 +22,8 @@ PROTECTED = re.compile(r"(^|/)(\.github/|\.gitlab-ci|setup\.py$|setup\.cfg$|pypr
                        r"requirements[^/]*\.txt$|tox\.ini$|noxfile\.py$|conftest\.py$|Makefile$|Dockerfile$)")
 TEST_FILE = re.compile(r"(^|/)(tests?/|__tests__/)|(^|/)test_[^/]+\.py$|_test\.py$|\.(test|spec)\.[jt]sx?$")
 CRLF, LF = "\r\n", "\n"
+# Worktrees hold the exact committed bytes so stored LF diffs apply on Windows hosts with core.autocrlf=true.
+NO_EOL_CONVERSION = ("-c", "core.autocrlf=false")
 
 
 class Worktree:
@@ -30,17 +32,19 @@ class Worktree:
     def __init__(self, repo: Path, commit: str, label: str = "wt"):
         self.repo, self.commit = repo.resolve(), commit
         self.path = Path(tempfile.mkdtemp(prefix=f"oss-forge-{label}-"))
-        r = run_command(["git", "worktree", "add", "--detach", "--force", str(self.path), commit], self.repo, timeout=120)
+        r = run_command(["git", *NO_EOL_CONVERSION, "worktree", "add", "--detach", "--force", str(self.path), commit],
+                        self.repo, timeout=120)
         if not r.ok:
             shutil.rmtree(self.path, ignore_errors=True)
             raise RuntimeError(f"git worktree add failed: {r.output[-500:]}")
 
     def git(self, *args: str, timeout: int = 60):
-        return run_command(["git", *args], self.path, timeout=timeout)
+        return run_command(["git", *NO_EOL_CONVERSION, *args], self.path, timeout=timeout)
 
     def changed_files(self) -> list[str]:
         out = self.git("status", "--porcelain", "--untracked-files=all").stdout
-        return sorted(line[3:].strip().strip('"') for line in out.splitlines() if line.strip())
+        files = (line[3:].strip().strip('"') for line in out.splitlines() if line.strip())
+        return sorted(f for f in files if "__pycache__" not in f and not f.endswith(".pyc"))
 
     def diff(self, paths: list[str] | None = None) -> str:
         self.git("add", "-N", ".")  # include new files in the diff without staging content
@@ -108,7 +112,10 @@ def find_unique(text: str, search: str) -> tuple[int, int] | None:
     offsets = [0]
     for line in lines:
         offsets.append(offsets[-1] + len(line) + 1)
-    return offsets[hits[0]], offsets[hits[0] + len(want)] - 1
+    end = offsets[hits[0] + len(want)] - 1
+    if search.endswith(LF) and end < len(text):
+        end += 1  # keep the replacement's trailing newline from doubling up
+    return offsets[hits[0]], end
 
 
 class PatchGuard:

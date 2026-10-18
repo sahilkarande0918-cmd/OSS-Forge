@@ -210,7 +210,7 @@ class TestSandbox:
             self._ensure_image()
             argv = ["docker", "run", "--rm", "--network", "none", "--memory", "1g", "--cpus", "1",
                     "--pids-limit", "256", "--security-opt", "no-new-privileges",
-                    "-v", f"{worktree.resolve()}:/work", "-w", "/work", RUNNER_IMAGE, "python", *pytest_args]
+                    "-e", "PYTHONDONTWRITEBYTECODE=1", "-v", f"{worktree.resolve()}:/work", "-w", "/work", RUNNER_IMAGE, "python", *pytest_args]
             result = run_command(argv, cwd=worktree, timeout=self.timeout)
             result.runner = "docker"
             return result
