@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oss-forge"
+version = "0.1.0"
+description = "Turn unfamiliar repositories into verified, review-ready open-source contributions using Gemma 4."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Sahil Karande" }]
+keywords = ["agent-skills", "gemma", "open-source", "code-repair", "opencode"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "google-genai>=1.30",
+    "pydantic>=2.6",
+    "pytest>=8.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5", "skills-ref>=0.1"]
+
+[project.scripts]
+oss-forge = "oss_forge.cli:main"
+
+[project.urls]
+Repository = "https://github.com/sahilkarande0918-cmd/OSS-Forge"
+
+[tool.setuptools.packages.find]
+include = ["oss_forge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["live: requires GEMINI_API_KEY and makes real Gemma 4 API calls"]
+
+[tool.ruff]
+line-length = 110

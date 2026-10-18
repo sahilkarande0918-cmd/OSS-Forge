@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OSS Forge runtime artifacts (runs, caches, memory, worktrees)
+.oss-forge/
+
+# Benchmark raw scratch (curated results in benchmarks/results are committed)
+benchmarks/results/tmp/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
