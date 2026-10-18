@@ -84,6 +84,55 @@ def cmd_validate_skill(args) -> int:
     return EXIT_OK if not errors else EXIT_ERROR
 
 
+# ------------------------------------------------------------------------------------- map / context / env
+def _repo_map(args, cfg):
+    from oss_forge.analysis.repo_map import build_repo_map
+    return build_repo_map(Path(args.repo), cache_dir=cfg.home / "cache", use_cache=not args.no_cache)
+
+
+def _read_issue_arg(value: str) -> str:
+    p = Path(value)
+    return p.read_text(encoding="utf-8") if p.is_file() else value
+
+
+def cmd_map(args) -> int:
+    cfg = load_config(args)
+    rm = _repo_map(args, cfg)
+    if args.json:
+        data = rm.to_dict()
+        if not args.full:
+            data["symbols"] = data["symbols"][:200]
+            data.pop("string_literals")
+        print(json.dumps(data, indent=2))
+    else:
+        print(rm.to_markdown())
+        print(f"\n(cache {'hit' if rm.cache_hit else 'miss'}, {rm.build_seconds}s)")
+    return EXIT_OK
+
+
+def cmd_context(args) -> int:
+    from oss_forge.analysis.context_engine import ContextEngine, IssueSignals
+    cfg = load_config(args)
+    rm = _repo_map(args, cfg)
+    pack = ContextEngine(rm).build(IssueSignals.from_text(_read_issue_arg(args.issue)), args.budget or cfg.max_context_tokens)
+    if args.json:
+        print(json.dumps(pack.to_dict(), indent=2))
+    else:
+        print("## Ranking\n" + "\n".join(f"{r['score']:6.1f}  {r['file']}:{r['line']} {r['symbol']}  <- "
+                                         + "; ".join(r["reasons"][:3]) for r in pack.ranking[:12]))
+        print(f"\n## Selected context ({pack.tokens} tokens / budget {pack.budget_tokens})\n" + pack.render())
+        print("\n## Metrics\n" + json.dumps(pack.metrics, indent=2))
+    return EXIT_OK
+
+
+def cmd_env(args) -> int:
+    from oss_forge.workflows.env_doctor import diagnose
+    cfg = load_config(args)
+    rep = diagnose(_repo_map(args, cfg))
+    emit(args, rep.to_dict(), rep.to_markdown())
+    return EXIT_OK
+
+
 # ------------------------------------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
@@ -110,6 +159,23 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("validate-skill", parents=[common], help="validate a SKILL.md against the Agent Skills spec")
     p.add_argument("path", nargs="?", default=str(Path(__file__).resolve().parent.parent / ".agents/skills/oss-forge"))
     p.set_defaults(func=cmd_validate_skill)
+
+    repo_opts = argparse.ArgumentParser(add_help=False)
+    repo_opts.add_argument("--repo", default=".", help="path to the target repository")
+    repo_opts.add_argument("--no-cache", action="store_true", help="rebuild the repository map")
+
+    p = sub.add_parser("map", parents=[common, repo_opts], help="repository intelligence (no API calls)")
+    p.add_argument("--full", action="store_true", help="with --json: include every symbol and string literal")
+    p.set_defaults(func=cmd_map)
+
+    p = sub.add_parser("context", parents=[common, repo_opts],
+                       help="rank code for an issue and pack it into a token budget (no API calls)")
+    p.add_argument("--issue", required=True, help="issue text or path to an issue .md file")
+    p.add_argument("--budget", type=int, help="context token budget (default OSS_FORGE_MAX_CONTEXT_TOKENS)")
+    p.set_defaults(func=cmd_context)
+
+    p = sub.add_parser("env", parents=[common, repo_opts], help="environment doctor: setup plan and diagnostics")
+    p.set_defaults(func=cmd_env)
     return parser
 
 

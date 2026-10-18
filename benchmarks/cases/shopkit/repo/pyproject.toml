@@ -1,0 +1,15 @@
+[project]
+name = "shopkit"
+version = "1.4.2"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+shopkit = "shopkit.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
