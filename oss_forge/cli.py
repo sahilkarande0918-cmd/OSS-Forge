@@ -133,6 +133,53 @@ def cmd_env(args) -> int:
     return EXIT_OK
 
 
+# ------------------------------------------------------------------------------------------- analyze
+def _forge(args, cfg):
+    from oss_forge.workflows.solve import Forge
+    return Forge(cfg, Path(args.repo), args.issue, allow_host_exec=args.allow_host_exec)
+
+
+def _require_key(cfg) -> bool:
+    if cfg.has_api_key:
+        return True
+    print("GEMINI_API_KEY is not set: copy .env.example to .env and add your key "
+          "(https://aistudio.google.com/apikey). Deterministic commands (map, context, env) work without it.",
+          file=sys.stderr)
+    return False
+
+
+def cmd_analyze(args) -> int:
+    from oss_forge.ai.gemma_provider import ProviderError
+    from oss_forge.workflows.patch_guard import Worktree
+    cfg = load_config(args)
+    if not _require_key(cfg):
+        return EXIT_BLOCKED
+    forge = _forge(args, cfg)
+    try:
+        forge.analyze()
+        if not cfg.dry_run and forge.rm.head:
+            with Worktree(forge.repo, forge.rm.head, "analyze") as wt:
+                forge.reproduce(wt)
+    except ProviderError as exc:
+        print(f"Gemma API error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    d = forge.diagnosis
+    data = {"run_id": forge.store.run_id, "run_dir": str(forge.store.root), "interpretation": forge.interpretation.model_dump(),
+            "context": {"files": forge.pack.files(), "tokens": forge.pack.tokens, "metrics": forge.pack.metrics},
+            "diagnosis": d.model_dump(), "reproduction": forge.repro_result.to_dict() if forge.repro_result else None,
+            "usage": forge.provider.usage(), "log": forge.log}
+    forge.store.write_json("analysis.json", data)
+    human = [f"Run {forge.store.run_id} -> {forge.store.root}", *forge.log, "", "Hypotheses:"]
+    human += [f"  [{h.confidence:.2f}] {h.file}::{h.symbol} - {h.explanation}" for h in d.hypotheses]
+    if forge.repro_result:
+        human.append(f"\nReproduction: {forge.repro_result.status} - {forge.repro_result.reason}")
+    elif cfg.dry_run:
+        human.append("\nDry run: regression test written to the run directory but not executed (use --execute).")
+    human.append(f"\nUsage: {forge.provider.usage()}")
+    emit(args, data, "\n".join(human))
+    return EXIT_OK
+
+
 # ------------------------------------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
@@ -176,6 +223,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("env", parents=[common, repo_opts], help="environment doctor: setup plan and diagnostics")
     p.set_defaults(func=cmd_env)
+
+    exec_opts = argparse.ArgumentParser(add_help=False)
+    exec_opts.add_argument("--issue", required=True,
+                           help="GitHub issue URL, #number (repo must have a GitHub remote), .md/.txt file, or text")
+    exec_opts.add_argument("--allow-host-exec", action="store_true",
+                           help="HUMAN APPROVAL: run this repository's tests on the host when Docker is unavailable")
+    exec_opts.add_argument("--max-patch-attempts", type=int)
+
+    p = sub.add_parser("analyze", parents=[common, repo_opts, exec_opts],
+                       help="Gemma 4 issue interpretation, root-cause hypotheses, regression test (+ reproduction with --execute)")
+    p.set_defaults(func=cmd_analyze)
     return parser
 
 

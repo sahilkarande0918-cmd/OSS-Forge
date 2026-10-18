@@ -29,6 +29,8 @@ FRAME_JS = re.compile(r"at (?:([\w.$<>]+) )?\(?([^\s()]+\.[jt]sx?):(\d+):\d+\)?"
 PATH_RE = re.compile(r"[\w./\\-]+\.(?:py|js|jsx|ts|tsx|mjs|cjs)\b")
 QUOTED = re.compile(r"""["'`]([^"'`\n]{6,160})["'`]""")
 EXC_RE = re.compile(r"\b([A-Z][A-Za-z]+(?:Error|Exception|Warning))\b")
+# "pkg.mod.CustomError: message" lines that end Python tracebacks (custom names need not end in Error)
+EXC_LINE = re.compile(r"(?m)^((?:[a-z_]\w*\.)+[A-Z]\w*|[A-Z]\w*(?:Error|Exception|Warning|Exit|Interrupt))(?::[ \t]*(.*))?$")
 
 WEIGHTS = {
     "stack_frame": 15.0, "exact_name": 9.0, "model_suspect": 7.0, "error_literal": 9.0, "file_mentioned": 6.0,
@@ -62,7 +64,7 @@ class IssueSignals:
             sig.frames.append((f.replace("\\", "/"), int(line), (func or "").split(".")[-1]))
         sig.paths = {p.replace("\\", "/").lstrip("./") for p in PATH_RE.findall(text)}
         sig.literals = [q.strip() for q in QUOTED.findall(text) if not IDENT.fullmatch(q.strip())]
-        sig.exceptions = set(EXC_RE.findall(text))
+        sig.exceptions = set(EXC_RE.findall(text)) | {name.split(".")[-1] for name, _ in EXC_LINE.findall(text)}
         sig.identifiers = {w for w in IDENT.findall(text) if w.lower() not in STOPWORDS}
         sig.identifiers |= {k for k in model_keywords if IDENT.fullmatch(k)}
         for w in list(sig.identifiers) + list(model_keywords):

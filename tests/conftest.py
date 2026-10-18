@@ -51,3 +51,15 @@ def make_repo(root: Path, files: dict[str, str]) -> Path:
     git(root, "-c", "user.email=t@example.com", "-c", "user.name=t", "add", "-A")
     git(root, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "init")
     return root
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(scope="session")
+def shopkit_repo(tmp_path_factory) -> Path:
+    """Fresh git repository built from the shopkit benchmark fixture."""
+    src = ROOT / "benchmarks/cases/shopkit/repo"
+    files = {p.relative_to(src).as_posix(): p.read_text(encoding="utf-8") for p in src.rglob("*")
+             if p.is_file() and "__pycache__" not in p.parts}
+    return make_repo(tmp_path_factory.mktemp("shopkit") / "repo", files)

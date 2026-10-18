@@ -1,5 +1,4 @@
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -14,13 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 CASES = json.loads((ROOT / "benchmarks/cases/cases.json").read_text())["cases"]
 
 
-@pytest.fixture(scope="module")
-def shopkit(tmp_path_factory):
-    dest = tmp_path_factory.mktemp("shopkit") / "repo"
-    shutil.copytree(ROOT / "benchmarks/cases/shopkit/repo", dest)
-    files = {p.relative_to(dest).as_posix(): p.read_text() for p in dest.rglob("*") if p.is_file()}
-    shutil.rmtree(dest)
-    return make_repo(dest, files)
+@pytest.fixture
+def shopkit(shopkit_repo):
+    return shopkit_repo
 
 
 def test_python_symbols():
@@ -54,8 +49,13 @@ def test_repo_map_facts_and_cache(shopkit, tmp_path):
     assert "# Repository map" in rm.to_markdown()
     again = build_repo_map(shopkit, cache_dir=tmp_path)
     assert again.cache_hit and again.fingerprint == rm.fingerprint
-    (shopkit / "shopkit" / "utils.py").write_text((shopkit / "shopkit" / "utils.py").read_text() + "\n# touched\n")
-    assert not build_repo_map(shopkit, cache_dir=tmp_path).cache_hit  # invalidated by file change
+    utils = shopkit / "shopkit" / "utils.py"
+    original = utils.read_bytes()
+    try:
+        utils.write_bytes(original + b"\n# touched\n")
+        assert not build_repo_map(shopkit, cache_dir=tmp_path).cache_hit  # invalidated by file change
+    finally:
+        utils.write_bytes(original)
 
 
 def test_repo_map_skips_secrets_and_vendored(tmp_path):
