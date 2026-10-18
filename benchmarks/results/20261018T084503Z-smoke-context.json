@@ -1,0 +1,151 @@
+{
+  "rows": [
+    {
+      "case": "A-median-logic",
+      "budget": 2500,
+      "repo_tokens": 5277,
+      "oss_forge": {
+        "hit": true,
+        "rank_of_ground_truth": 1,
+        "tokens": 2001,
+        "files": [
+          "shopkit/cli.py",
+          "shopkit/models.py",
+          "shopkit/notifications.py",
+          "shopkit/pricing.py",
+          "shopkit/reports.py",
+          "shopkit/storage.py",
+          "tests/conftest.py"
+        ]
+      },
+      "path_order": {
+        "hit": false,
+        "tokens": 2487,
+        "files": [
+          "shopkit/__init__.py",
+          "shopkit/catalog.py",
+          "shopkit/checkout.py",
+          "shopkit/cli.py",
+          "shopkit/config.py",
+          "shopkit/inventory.py",
+          "shopkit/loyalty.py",
+          "shopkit/models.py",
+          "shopkit/notifications.py"
+        ]
+      },
+      "keyword_grep": {
+        "hit": true,
+        "tokens": 2416,
+        "files": [
+          "shopkit/reports.py",
+          "shopkit/storage.py",
+          "shopkit/cli.py",
+          "shopkit/notifications.py",
+          "shopkit/checkout.py",
+          "shopkit/shipping.py",
+          "shopkit/loyalty.py",
+          "shopkit/__init__.py"
+        ]
+      }
+    },
+    {
+      "case": "B-checkout-tax-multifile",
+      "budget": 2500,
+      "repo_tokens": 5277,
+      "oss_forge": {
+        "hit": true,
+        "rank_of_ground_truth": 2,
+        "tokens": 2408,
+        "files": [
+          "shopkit/checkout.py",
+          "shopkit/cli.py",
+          "shopkit/loyalty.py",
+          "shopkit/models.py",
+          "shopkit/notifications.py",
+          "shopkit/pricing.py",
+          "shopkit/reports.py",
+          "shopkit/shipping.py",
+          "shopkit/storage.py"
+        ]
+      },
+      "path_order": {
+        "hit": true,
+        "tokens": 2487,
+        "files": [
+          "shopkit/__init__.py",
+          "shopkit/catalog.py",
+          "shopkit/checkout.py",
+          "shopkit/cli.py",
+          "shopkit/config.py",
+          "shopkit/inventory.py",
+          "shopkit/loyalty.py",
+          "shopkit/models.py",
+          "shopkit/notifications.py"
+        ]
+      },
+      "keyword_grep": {
+        "hit": true,
+        "tokens": 2275,
+        "files": [
+          "shopkit/checkout.py",
+          "shopkit/reports.py",
+          "shopkit/cli.py",
+          "shopkit/notifications.py",
+          "shopkit/shipping.py",
+          "shopkit/config.py",
+          "shopkit/storage.py"
+        ]
+      }
+    },
+    {
+      "case": "D-slugify-digits",
+      "budget": 2500,
+      "repo_tokens": 5277,
+      "oss_forge": {
+        "hit": true,
+        "rank_of_ground_truth": 2,
+        "tokens": 1601,
+        "files": [
+          "shopkit/catalog.py",
+          "shopkit/inventory.py",
+          "shopkit/models.py",
+          "shopkit/storage.py",
+          "shopkit/utils.py",
+          "tests/conftest.py"
+        ]
+      },
+      "path_order": {
+        "hit": false,
+        "tokens": 2487,
+        "files": [
+          "shopkit/__init__.py",
+          "shopkit/catalog.py",
+          "shopkit/checkout.py",
+          "shopkit/cli.py",
+          "shopkit/config.py",
+          "shopkit/inventory.py",
+          "shopkit/loyalty.py",
+          "shopkit/models.py",
+          "shopkit/notifications.py"
+        ]
+      },
+      "keyword_grep": {
+        "hit": false,
+        "tokens": 2321,
+        "files": [
+          "shopkit/catalog.py",
+          "shopkit/inventory.py",
+          "shopkit/models.py",
+          "shopkit/storage.py",
+          "shopkit/cli.py",
+          "shopkit/reports.py"
+        ]
+      }
+    }
+  ],
+  "suite": "smoke",
+  "mode": "context",
+  "budget": 2500,
+  "created_at": "20261018T084503Z",
+  "command": "python -m oss_forge benchmark --suite smoke --mode context --budget 2500"
+}

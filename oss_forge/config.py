@@ -60,7 +60,8 @@ class Config:
     max_api_calls: int = 30
     max_patch_attempts: int = 3
     dry_run: bool = True
-    thinking: str = "minimal"
+    thinking: str = "high"
+    json_mode: str = "template"
     timeout_seconds: int = 120
     sandbox: str = "auto"
     home: Path = Path(".oss-forge")
@@ -84,6 +85,7 @@ class Config:
             "max_patch_attempts": self.max_patch_attempts,
             "dry_run": self.dry_run,
             "thinking": self.thinking,
+            "json_mode": self.json_mode,
             "timeout_seconds": self.timeout_seconds,
             "sandbox": self.sandbox,
             "home": str(self.home),
@@ -96,9 +98,12 @@ class Config:
         model = os.environ.get("OSS_FORGE_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
         if not model.startswith("gemma-4"):
             raise ConfigError(f"OSS_FORGE_MODEL must be a hosted Gemma 4 model {SUPPORTED_MODELS}, got {model!r}")
-        thinking = os.environ.get("OSS_FORGE_THINKING", "minimal").strip().lower()
+        thinking = os.environ.get("OSS_FORGE_THINKING", "high").strip().lower()
         if thinking not in {"minimal", "high"}:
             raise ConfigError("OSS_FORGE_THINKING must be 'minimal' or 'high'")
+        json_mode = os.environ.get("OSS_FORGE_JSON_MODE", "template").strip().lower()
+        if json_mode not in {"template", "schema"}:
+            raise ConfigError("OSS_FORGE_JSON_MODE must be 'template' or 'schema'")
         sandbox = os.environ.get("OSS_FORGE_SANDBOX", "auto").strip().lower()
         if sandbox not in {"auto", "docker", "host"}:
             raise ConfigError("OSS_FORGE_SANDBOX must be auto, docker or host")
@@ -110,6 +115,7 @@ class Config:
             max_patch_attempts=_int("OSS_FORGE_MAX_PATCH_ATTEMPTS", 3),
             dry_run=_bool(os.environ.get("OSS_FORGE_DRY_RUN", "true")),
             thinking=thinking,
+            json_mode=json_mode,
             timeout_seconds=_int("OSS_FORGE_TIMEOUT_SECONDS", 120),
             sandbox=sandbox,
             home=Path(os.environ.get("OSS_FORGE_HOME", ".oss-forge")),

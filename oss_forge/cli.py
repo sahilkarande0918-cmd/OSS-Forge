@@ -246,6 +246,86 @@ def cmd_pr(args) -> int:
     return EXIT_OK if result.get("created") else EXIT_ERROR
 
 
+def _benchmark_module():
+    import importlib.util
+    path = Path(__file__).resolve().parent.parent / "benchmarks" / "benchmark_runner.py"
+    if not path.is_file():
+        raise SystemExit("benchmarks/ not found: run the benchmark from an OSS-Forge source checkout")
+    spec = importlib.util.spec_from_file_location("oss_forge_benchmark_runner", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve annotations through sys.modules
+    spec.loader.exec_module(module)
+    return module
+
+
+def cmd_benchmark(args) -> int:
+    bench = _benchmark_module()
+    cfg = load_config(args)
+    if args.mode == "live" and not _require_key(cfg):
+        return EXIT_BLOCKED
+    command = "python -m oss_forge benchmark " + " ".join(sys.argv[2:] if len(sys.argv) > 2 else [])
+    report = bench.run(cfg, args.suite, args.mode, args.budget, args.allow_host_exec,
+                       Path(args.results_dir) if args.results_dir else None, command.strip())
+    emit(args, {k: v for k, v in report.items() if k != "markdown"}, report["markdown"])
+    return EXIT_OK
+
+
+def cmd_memory(args) -> int:
+    from oss_forge.analysis.repo_memory import RepoMemory
+    cfg = load_config(args)
+    rm = _repo_map(args, cfg)
+    mem = RepoMemory.load(cfg.home, rm.repo_id)
+    if args.refresh or not mem.data.get("architecture"):
+        mem.learn_repo(rm)
+        mem.save()
+    summary = mem.summary(Path(args.repo))
+    emit(args, summary, json.dumps(summary, indent=2))
+    return EXIT_OK
+
+
+def cmd_ci_repair(args) -> int:
+    from oss_forge.ai.gemma_provider import GemmaProvider
+    from oss_forge.security.execution_policy import TestSandbox
+    from oss_forge.workflows import ci_repair
+    from oss_forge.workflows.solve import RunStore
+    cfg = load_config(args)
+    store = RunStore.open(cfg.home, args.run_id)
+    meta = store.read_json("run.json")
+    repo = Path(args.repo or meta["repo_path"])
+    modified = [f["file"] for f in meta.get("changed_files", [])]
+    if args.log:
+        log, source = Path(args.log).read_text(encoding="utf-8", errors="replace"), f"file:{args.log}"
+    else:
+        log, source = ci_repair.fetch_failed_log(repo, args.pr, args.ci_run), f"github:{args.pr or args.ci_run}"
+    t = ci_repair.triage_log(log, source, modified)
+    if args.use_gemma and _require_key(cfg):
+        t.model_analysis = ci_repair.analyze_with_gemma(t, GemmaProvider(cfg), modified).model_dump()
+    if not cfg.dry_run and t.failing_tests:
+        t.local_rerun = ci_repair.rerun_locally(repo, meta["base_commit"], meta.get("patch", ""), t.failing_tests,
+                                                TestSandbox(cfg.sandbox, args.allow_host_exec))
+    store.write_json("ci_report.json", t.to_dict())
+    capsule = store.read_json("capsule.json")
+    capsule.setdefault("limitations", []).append(f"CI triage ({source}): {t.classification}; failing tests "
+                                                 f"{t.failing_tests[:5]}; see ci_report.json")
+    store.write_json("capsule.json", capsule)
+    emit(args, t.to_dict(), f"Classification: {t.classification}\nFailed steps: {t.failed_steps[:5]}\n"
+                            f"Failing tests: {t.failing_tests}\nEnvironment: {t.environment_signals}\n"
+                            f"Correlated with modified files: {t.correlated_files}\n"
+                            f"Local re-run: {json.dumps(t.local_rerun) if t.local_rerun else 'not run (dry run)'}")
+    return EXIT_OK
+
+
+def cmd_triage(args) -> int:
+    from oss_forge.workflows import maintainer
+    cfg = load_config(args)
+    rm = _repo_map(args, cfg)
+    issues = (json.loads(Path(args.issues_file).read_text(encoding="utf-8")) if args.issues_file
+              else maintainer.fetch_open_issues(Path(args.repo), args.limit))
+    items = maintainer.triage(issues, rm)
+    emit(args, {"issues": maintainer.to_dicts(items)}, maintainer.to_markdown(items))
+    return EXIT_OK
+
+
 def cmd_schema(args) -> int:
     from oss_forge.workflows.capsule import capsule_json_schema
     print(json.dumps(capsule_json_schema(), indent=2))
@@ -323,6 +403,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--create", action="store_true", help="push a branch to origin and open a draft PR")
     p.add_argument("--approve", action="store_true", help="explicit human authorization for --create")
     p.set_defaults(func=cmd_pr)
+
+    p = sub.add_parser("benchmark", parents=[common], help="baseline vs OSS Forge on benchmark cases")
+    p.add_argument("--suite", default="smoke")
+    p.add_argument("--mode", choices=["context", "live"], default="context",
+                   help="context: no API calls; live: end-to-end with Gemma 4 (needs key + sandbox)")
+    p.add_argument("--budget", type=int, default=2500, help="code-context token budget for every system")
+    p.add_argument("--allow-host-exec", action="store_true", help="HUMAN APPROVAL: run fixture tests on the host")
+    p.add_argument("--results-dir")
+    p.set_defaults(func=cmd_benchmark)
+
+    p = sub.add_parser("memory", parents=[common, repo_opts], help="show (or --refresh) persistent repository memory")
+    p.add_argument("--refresh", action="store_true")
+    p.set_defaults(func=cmd_memory)
+
+    p = sub.add_parser("ci-repair", parents=[common], help="triage a failing CI run for a stored run's patch")
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--repo")
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--log", help="saved CI log file (offline / dry-run analysis)")
+    src.add_argument("--pr", help="PR number or URL (uses gh, read-only)")
+    src.add_argument("--ci-run", help="GitHub Actions run id (uses gh, read-only)")
+    p.add_argument("--use-gemma", action="store_true", help="add a Gemma 4 failure analysis (1 API call)")
+    p.add_argument("--allow-host-exec", action="store_true")
+    p.set_defaults(func=cmd_ci_repair)
+
+    p = sub.add_parser("triage", parents=[common, repo_opts], help="maintainer mode: rank open issues (read-only)")
+    p.add_argument("--limit", type=int, default=30)
+    p.add_argument("--issues-file", help="JSON list of issues (number,title,body,labels) instead of gh")
+    p.set_defaults(func=cmd_triage)
 
     p = sub.add_parser("capsule-schema", parents=[common], help="print the Proof-of-Fix capsule JSON Schema")
     p.set_defaults(func=cmd_schema)

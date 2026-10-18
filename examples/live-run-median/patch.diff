@@ -1,0 +1,13 @@
+diff --git a/shopkit/reports.py b/shopkit/reports.py
+index 64f8e68..2a75a73 100644
+--- a/shopkit/reports.py
++++ b/shopkit/reports.py
+@@ -20,6 +20,8 @@ def median_order_value(orders: list[Order]) -> Decimal:
+         raise ValueError("no orders")
+     values = sorted(o.subtotal for o in orders)
+     mid = len(values) // 2
++    if len(values) % 2 == 0:
++        return round_money((values[mid - 1] + values[mid]) / 2)
+     return round_money(values[mid])
+ 
+ 

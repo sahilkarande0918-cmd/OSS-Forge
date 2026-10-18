@@ -1,5 +1,4 @@
 """Integration tests: real git worktrees, real pytest runs, real patch application. Only Gemma is scripted."""
-from pathlib import Path
 
 import pytest
 from conftest import FakeClient

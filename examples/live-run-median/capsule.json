@@ -1,0 +1,302 @@
+{
+  "schema_version": "1.0",
+  "tool": "oss-forge 0.1.0",
+  "created_at": "2026-10-18T09:25:24+00:00",
+  "run_id": "20261018-145324-sales-report-shows-the-wrong-m",
+  "repository": {
+    "id": "shopkit-demo-317cecf975",
+    "remote": null,
+    "name": "shopkit-demo",
+    "branch": "main"
+  },
+  "base_commit": "2e1a25653290565bfe91fe3bb49c5d7bc89ec05a",
+  "issue": {
+    "source": "file",
+    "title": "Sales report shows the wrong median order value",
+    "body": "When there is an even number of orders the sales report prints the wrong median.\n\nSteps to reproduce:\n1. Create four orders worth 10, 20, 30 and 40 dollars.\n2. Run `shopkit report orders.json`.\n\nExpected: `Median order value: 25.00` (the mean of the two middle values)\nActual: `Median order value: 30.00`\n\nWith an odd number of orders the value looks right.",
+    "url": "examples\\issue-median.md",
+    "number": null,
+    "repo": "",
+    "labels": []
+  },
+  "verification_status": "VERIFIED",
+  "verification_summary": "regression test fails on 2e1a256532 and passes with the patch; 11/11 existing tests pass with no new failures",
+  "verification_checks": {
+    "patch_applies": true,
+    "regression_fails_before": true,
+    "regression_passes_after": true,
+    "existing_suite_ran": true,
+    "no_new_failures": true,
+    "only_expected_files_changed": true,
+    "syntax_ok": true,
+    "whitespace_ok": true
+  },
+  "reproduction": {
+    "status": "REPRODUCED",
+    "reason": "assertion fails on the original code",
+    "test_file": "tests/test_median_regression.py",
+    "exit_code": 1,
+    "duration_s": 0.68,
+    "runner": "host",
+    "failure_type": "AssertionError",
+    "output_tail": "F                                                                        [100%]\n================================== FAILURES ===================================\n________________ test_median_order_value_even_number_of_orders ________________\ntests\\test_median_regression.py:29: in test_median_order_value_even_number_of_orders\n    assert median_order_value([o1, o2, o3, o4]) == Decimal(\"25.00\")\nE   AssertionError: assert Decimal('30.00') == Decimal('25.00')\nE    +  where Decimal('30.00') = median_order_value([Order(order_id='1', customer=Customer(customer_id='C1', email='ana@example.com', state='CA', loyalty_points=100), ite...mal('40.00'), category='general', weight_kg=0.5), quantity=1)], placed_on=datetime.date(2024, 3, 1), status='pending')])\nE    +  and   Decimal('25.00') = Decimal('25.00')\n=========================== short test summary info ===========================\nFAILED tests/test_median_regression.py::test_median_order_value_even_number_of_orders\n1 failed in 0.08s",
+    "command": [
+      "python.exe",
+      "-m",
+      "pytest",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_median_regression.py",
+      "-q",
+      "--tb=short",
+      "-rfE",
+      "--no-header"
+    ]
+  },
+  "root_cause": "The `median_order_value` function calculates the median by simply selecting the middle element at `len(values) // 2`, which is incorrect for an even number of elements where the median should be the average of the two middle elements.",
+  "hypotheses": [
+    {
+      "file": "shopkit/reports.py",
+      "symbol": "median_order_value",
+      "explanation": "The function `median_order_value` currently only returns the element at the index `len(values) // 2`. For an even number of elements, this index refers to the second of the two middle elements (e.g., for 4 elements, index 2 of [0, 1, 2, 3]). To correctly compute the median for an even set, it should instead return the mean of the elements at indices `n/2 - 1` and `n/2`.",
+      "evidence": [
+        "mid = len(values) // 2",
+        "return round_money(values[mid])"
+      ],
+      "confidence": 1.0,
+      "validation": "A test case with an even number of orders (e.g., subtotals 10, 20, 30, 40) will show the current code returns 30.00, whereas the median should be 25.00."
+    }
+  ],
+  "source_locations": [
+    {
+      "file": "shopkit/cli.py",
+      "symbol": "main",
+      "start_line": 11,
+      "end_line": 28,
+      "reason": "lexical similarity (+2.3); recent git history (+1.5)"
+    },
+    {
+      "file": "shopkit/pricing.py",
+      "symbol": "round_money",
+      "start_line": 9,
+      "end_line": 11,
+      "reason": "recent git history (+1.5); call-graph neighbour of median_order_value (+4.8)"
+    },
+    {
+      "file": "shopkit/reports.py",
+      "symbol": "median_order_value",
+      "start_line": 17,
+      "end_line": 23,
+      "reason": "file mentioned (+6.0); name words ['median', 'order'] (+3.0)"
+    },
+    {
+      "file": "shopkit/models.py",
+      "symbol": "Order",
+      "start_line": 40,
+      "end_line": 67,
+      "reason": "name words ['order'] (+1.5); lexical similarity (+0.7)"
+    },
+    {
+      "file": "shopkit/reports.py",
+      "symbol": "tax_liability",
+      "start_line": 42,
+      "end_line": 47,
+      "reason": "file mentioned (+6.0); lexical similarity (+1.1)"
+    },
+    {
+      "file": "shopkit/reports.py",
+      "symbol": "revenue",
+      "start_line": 13,
+      "end_line": 14,
+      "reason": "file mentioned (+6.0); lexical similarity (+0.9)"
+    },
+    {
+      "file": "shopkit/reports.py",
+      "symbol": "top_products",
+      "start_line": 26,
+      "end_line": 32,
+      "reason": "file mentioned (+6.0); lexical similarity (+0.7)"
+    },
+    {
+      "file": "shopkit/reports.py",
+      "symbol": "revenue_by_day",
+      "start_line": 35,
+      "end_line": 39,
+      "reason": "file mentioned (+6.0); lexical similarity (+0.8)"
+    }
+  ],
+  "regression_test": {
+    "path": "tests/test_median_regression.py",
+    "code": "from decimal import Decimal\nimport pytest\nfrom shopkit.models import Order, Product, Customer\nfrom shopkit.reports import median_order_value\n\ndef test_median_order_value_even_number_of_orders(make_order):\n    \"\"\"Regression test for even number of orders median calculation.\"\"\"\n    p = Product(\"TEST\", \"Test Product\", Decimal(\"10.00\"))\n    \n    # Create orders with subtotals: 10.00, 20.00, 30.00, 40.00\n    orders = [\n        make_order(order_id=\"O1\", items=[(p, 1)]),  # 10.00\n        make_order(order_id=\"O2\", items=[(p, 2)]),  # 20.00\n        make_order(order_id=\"O3\", items=[(p, 3)]),  # 30.00\n        make_order(order_id=\"O4\", items=[(p, 4)]),  # 40.00\n    ]\n    \n    # The median of [10, 20, 30, 40] should be (20 + 30) / 2 = 25.00\n    # Note: The make_order fixture adds items via order.add(product, qty)\n    # We need to adjust the subtotal manually if we want specific values easily\n    # but we can just use different products or quantities.\n    \n    # Re-creating logic to ensure exact values as requested by issue\n    o1 = make_order(order_id=\"1\", items=[(Product(\"A\", \"A\", Decimal(\"10.00\")), 1)])\n    o2 = make_order(order_id=\"2\", items=[(Product(\"B\", \"B\", Decimal(\"20.00\")), 1)])\n    o3 = make_order(order_id=\"3\", items=[(Product(\"C\", \"C\", Decimal(\"30.00\")), 1)])\n    o4 = make_order(order_id=\"4\", items=[(Product(\"D\", \"D\", Decimal(\"40.00\")), 1)])\n    \n    assert median_order_value([o1, o2, o3, o4]) == Decimal(\"25.00\")\n"
+  },
+  "patch": "diff --git a/shopkit/reports.py b/shopkit/reports.py\nindex 64f8e68..2a75a73 100644\n--- a/shopkit/reports.py\n+++ b/shopkit/reports.py\n@@ -20,6 +20,8 @@ def median_order_value(orders: list[Order]) -> Decimal:\n         raise ValueError(\"no orders\")\n     values = sorted(o.subtotal for o in orders)\n     mid = len(values) // 2\n+    if len(values) % 2 == 0:\n+        return round_money((values[mid - 1] + values[mid]) / 2)\n     return round_money(values[mid])\n \n \n",
+  "changed_files": [
+    {
+      "file": "shopkit/reports.py",
+      "added": 2,
+      "removed": 0
+    }
+  ],
+  "test_evidence": [
+    {
+      "label": "reproduction",
+      "command": [
+        "python.exe",
+        "-m",
+        "pytest",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_median_regression.py",
+        "-q",
+        "--tb=short",
+        "-rfE",
+        "--no-header"
+      ],
+      "exit_code": 1,
+      "duration_s": 0.68,
+      "runner": "host",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "output_tail": "F                                                                        [100%]\n================================== FAILURES ===================================\n________________ test_median_order_value_even_number_of_orders ________________\ntests\\test_median_regression.py:29: in test_median_order_value_even_number_of_orders\n    assert median_order_value([o1, o2, o3, o4]) == Decimal(\"25.00\")\nE   AssertionError: assert Decimal('30.00') == Decimal('25.00')\nE    +  where Decimal('30.00') = median_order_value([Order(order_id='1', customer=Customer(customer_id='C1', email='ana@example.com', state='CA', loyalty_points=100), ite...mal('40.00'), category='general', weight_kg=0.5), quantity=1)], placed_on=datetime.date(2024, 3, 1), status='pending')])\nE    +  and   Decimal('25.00') = Decimal('25.00')\n=========================== short test summary info ===========================\nFAILED tests/test_median_regression.py::test_median_order_value_even_number_of_orders\n1 failed in 0.08s"
+    },
+    {
+      "label": "regression_before",
+      "command": [
+        "python.exe",
+        "-m",
+        "pytest",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_median_regression.py",
+        "-q",
+        "--tb=short",
+        "--no-header",
+        "--junitxml=.oss-forge-junit.xml"
+      ],
+      "exit_code": 1,
+      "duration_s": 0.821,
+      "runner": "host",
+      "passed": 0,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0,
+      "output_tail": "F                                                                        [100%]\n================================== FAILURES ===================================\n________________ test_median_order_value_even_number_of_orders ________________\ntests\\test_median_regression.py:29: in test_median_order_value_even_number_of_orders\n    assert median_order_value([o1, o2, o3, o4]) == Decimal(\"25.00\")\nE   AssertionError: assert Decimal('30.00') == Decimal('25.00')\nE    +  where Decimal('30.00') = median_order_value([Order(order_id='1', customer=Customer(customer_id='C1', email='ana@example.com', state='CA', loyalty_points=100), ite...mal('40.00'), category='general', weight_kg=0.5), quantity=1)], placed_on=datetime.date(2024, 3, 1), status='pending')])\nE    +  and   Decimal('25.00') = Decimal('25.00')\n=========================== short test summary info ===========================\nFAILED tests/test_median_regression.py::test_median_order_value_even_number_of_orders\n1 failed in 0.15s"
+    },
+    {
+      "label": "suite_before",
+      "command": [
+        "python.exe",
+        "-m",
+        "pytest",
+        "-p",
+        "no:cacheprovider",
+        "--ignore=tests/test_median_regression.py",
+        "-q",
+        "--tb=short",
+        "--no-header",
+        "--junitxml=.oss-forge-junit.xml"
+      ],
+      "exit_code": 0,
+      "duration_s": 0.936,
+      "runner": "host",
+      "passed": 11,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "output_tail": "...........                                                              [100%]\n11 passed in 0.35s"
+    },
+    {
+      "label": "regression_after",
+      "command": [
+        "python.exe",
+        "-m",
+        "pytest",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_median_regression.py",
+        "-q",
+        "--tb=short",
+        "--no-header",
+        "--junitxml=.oss-forge-junit.xml"
+      ],
+      "exit_code": 0,
+      "duration_s": 0.71,
+      "runner": "host",
+      "passed": 1,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "output_tail": ".                                                                        [100%]\n1 passed in 0.06s"
+    },
+    {
+      "label": "suite_after",
+      "command": [
+        "python.exe",
+        "-m",
+        "pytest",
+        "-p",
+        "no:cacheprovider",
+        "--ignore=tests/test_median_regression.py",
+        "-q",
+        "--tb=short",
+        "--no-header",
+        "--junitxml=.oss-forge-junit.xml"
+      ],
+      "exit_code": 0,
+      "duration_s": 0.776,
+      "runner": "host",
+      "passed": 11,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "output_tail": "...........                                                              [100%]\n11 passed in 0.10s"
+    }
+  ],
+  "new_failures": [],
+  "preexisting_failures": [],
+  "patch_attempts": 1,
+  "model": "gemma-4-26b-a4b-it",
+  "usage": {
+    "model": "gemma-4-26b-a4b-it",
+    "api_calls": 3,
+    "api_requests": 3,
+    "failed_calls": 0,
+    "estimated_prompt_tokens": 8549,
+    "prompt_tokens": 10733,
+    "output_tokens": 5153,
+    "total_tokens": 15886,
+    "reported_by_api": true,
+    "estimated_cost_usd": null,
+    "latency_s": 113.57
+  },
+  "context": {
+    "repo_files": 19,
+    "repo_tokens_estimate": 5277,
+    "symbols_scored": 70,
+    "symbols_with_signal": 59,
+    "files_inspected": 13,
+    "selected_items": 24,
+    "selected_files": 9,
+    "context_tokens": 2485,
+    "context_fraction_of_repo": 0.4709,
+    "repo_map_cache_hit": true,
+    "expansions": 0
+  },
+  "sandbox": "host: host execution explicitly approved (--allow-host-exec); env scrubbed",
+  "limitations": [
+    "A passing regression test shows the reported symptom is gone for the tested inputs; it does not prove the issue is fixed for every input or platform. Review the diff.",
+    "Tests ran on the host (approved), not in a container; results depend on the local environment.",
+    "Root-cause explanation and hypotheses are model-generated and unverified beyond the tests listed."
+  ],
+  "reproduction_commands": [
+    "python -m oss_forge verify --run-id 20261018-145324-sales-report-shows-the-wrong-m --repo <path-to-repo> --execute",
+    "# or manually:",
+    "git worktree add --detach ../verify 2e1a25653290565bfe91fe3bb49c5d7bc89ec05a",
+    "cp <OSS_FORGE_HOME>/runs/20261018-145324-sales-report-shows-the-wrong-m/regression_test.py ../verify/tests/test_median_regression.py",
+    "cd ../verify && python -m pytest tests/test_median_regression.py   # expected: FAIL (bug present)",
+    "git apply <OSS_FORGE_HOME>/runs/20261018-145324-sales-report-shows-the-wrong-m/patch.diff",
+    "python -m pytest   # expected: PASS"
+  ]
+}

@@ -171,14 +171,17 @@ def existing_test_sample(rm: RepoMap, pack: ContextPack, max_lines: int = 30) ->
 
 
 def diagnose_issue(issue: Issue, interp: IssueInterpretation, rm: RepoMap, engine: ContextEngine, pack: ContextPack,
-                   provider: GemmaProvider, max_expansion_rounds: int = 2, feedback: str = "") -> Diagnosis:
+                   provider: GemmaProvider, max_expansion_rounds: int = 2, feedback: str = "",
+                   memory_hints: list[str] | None = None) -> Diagnosis:
     """Hypotheses + regression test. The model may request missing definitions (progressive expansion)."""
     diagnosis = Diagnosis()
     for round_no in range(max_expansion_rounds + 1):
         prompt = (f"Issue interpretation: {interp.model_dump_json()}\n\n"
                   f"Conventions: {conventions_excerpt(rm)}\n"
                   f"Existing test style sample:\n```\n{existing_test_sample(rm, pack)}\n```\n\n"
-                  f"Relevant code (ranked, with line numbers):\n{pack.render()}\n\n"
+                  + (("Repository memory (earlier runs on unchanged files; hints, not evidence):\n- "
+                      + "\n- ".join(memory_hints) + "\n\n") if memory_hints else "")
+                  + f"Relevant code (ranked, with line numbers):\n{pack.render()}\n\n"
                   f"{untrusted('issue', issue.text)}\n\n"
                   "Tasks:\n1. Give 1-3 ranked root-cause hypotheses; each cites file, symbol and concrete evidence "
                   "from the code above, a confidence in [0,1], and how a test would validate it.\n"

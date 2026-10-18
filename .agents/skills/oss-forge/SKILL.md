@@ -96,3 +96,4 @@ exactly what is needed, OR the user declines an approval. Do not loop on the sam
 - Security model and limits: [references/SECURITY.md](references/SECURITY.md)
 - Capsule format: [references/CAPSULE.md](references/CAPSULE.md)
 - OpenCode setup and Gemma provider notes: [references/OPENCODE.md](references/OPENCODE.md)
+- Advanced (CI repair, repository memory, maintainer mode): [references/ADVANCED.md](references/ADVANCED.md)

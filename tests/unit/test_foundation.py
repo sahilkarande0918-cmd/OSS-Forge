@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from conftest import FakeClient
 
-from oss_forge.ai.gemma_provider import BudgetExceeded, GemmaProvider, ProviderError, extract_json
+from oss_forge.ai.gemma_provider import BudgetExceeded, GemmaProvider, ProviderError, extract_json, is_degenerate
 from oss_forge.ai.schemas import Ping
 from oss_forge.config import Config, ConfigError
 from oss_forge.security.execution_policy import (PolicyViolation, TestSandbox, redact, run_command, safe_path,
@@ -72,6 +72,19 @@ def test_provider_retries_transient(monkeypatch, config):
     provider = GemmaProvider(config, client=FakeClient([err, {"ok": True}]))
     assert provider.generate_json("t", "ping", Ping).ok
     assert provider.ledger.calls[0].attempts == 2
+
+
+def test_provider_resamples_degenerate_output(config):
+    loop = '{"ok": true, "message": "' + "I'll use the text. " * 60
+    provider = GemmaProvider(config, client=FakeClient([loop, {"ok": True, "message": "fine"}]))
+    assert provider.generate_json("t", "ping", Ping).message == "fine"
+    assert provider.ledger.calls[0].attempts == 2 and provider.ledger.calls[0].degenerate == 1
+    assert not is_degenerate("# " + "-" * 100 + "\nx = 1\n")
+
+
+def test_provider_unwraps_schema_echo(config):
+    echo = {"type": "object", "description": "x", "properties": {"ok": True, "message": "hi"}}
+    assert GemmaProvider(config, client=FakeClient([echo])).generate_json("t", "p", Ping).message == "hi"
 
 
 def test_provider_auth_error_not_retried(config):

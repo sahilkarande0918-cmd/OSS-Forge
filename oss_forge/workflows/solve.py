@@ -10,17 +10,24 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from oss_forge.ai.gemma_provider import GemmaProvider, untrusted
-from oss_forge.ai.schemas import Diagnosis, IssueInterpretation, PatchProposal, RegressionTest
+from oss_forge.ai.schemas import Diagnosis, IssueInterpretation, PatchProposal
 from oss_forge.analysis.context_engine import ContextEngine, ContextPack, IssueSignals
 from oss_forge.analysis.repo_map import RepoMap, build_repo_map
+from oss_forge.analysis.repo_memory import RepoMemory
 from oss_forge.config import Config
 from oss_forge.security.execution_policy import TestSandbox
 from oss_forge.workflows import reproduce as repro
-from oss_forge.workflows.issue_detective import (Issue, conventions_excerpt, diagnose_issue, extract_facts,
-                                                 interpret_issue, load_issue)
+from oss_forge.workflows.issue_detective import (
+    Issue,
+    conventions_excerpt,
+    diagnose_issue,
+    extract_facts,
+    interpret_issue,
+    load_issue,
+)
 from oss_forge.workflows.patch_guard import PatchGuard, PatchResult, Worktree, scope_from_context
 
 
@@ -97,6 +104,8 @@ class Forge:
     final_patch: PatchResult | None = None
     final_proposal: PatchProposal | None = None
     timings: dict = field(default_factory=dict)
+    memory: RepoMemory | None = None
+    memory_hints: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         self.repo = self.repo.resolve()
@@ -136,8 +145,13 @@ class Forge:
         self.say(f"context: {len(self.pack.items)} definitions from {len(self.pack.files())} files, "
                  f"{self.pack.tokens} tokens (repo ~{self.rm.total_tokens_estimate})")
 
+        self.memory = RepoMemory.load(self.config.home, self.rm.repo_id)
+        self.memory_hints = self.memory.hints_for(self.repo, self.issue.text)
+        if self.memory_hints:
+            self.say(f"repository memory: {len(self.memory_hints)} relevant earlier run(s)")
         t = time.perf_counter()
-        self.diagnosis = diagnose_issue(self.issue, self.interpretation, self.rm, self.engine, self.pack, self.provider)
+        self.diagnosis = diagnose_issue(self.issue, self.interpretation, self.rm, self.engine, self.pack, self.provider,
+                                        memory_hints=self.memory_hints)
         self._timed("diagnose", t)
         self.store.write_json("context.json", self.pack.to_dict())
         self.store.write_json("diagnosis.json", self.diagnosis.model_dump())
@@ -161,7 +175,8 @@ class Forge:
             (wt.path / result.test_file).unlink(missing_ok=True) if result.test_file else None
             self.diagnosis = diagnose_issue(self.issue, self.interpretation, self.rm, self.engine, self.pack,
                                             self.provider, max_expansion_rounds=0,
-                                            feedback=f"{result.reason}\n{result.output_tail[-1500:]}")
+                                            feedback=f"{result.reason}\n{result.output_tail[-1500:]}",
+                                            memory_hints=self.memory_hints)
             self.store.write_json("diagnosis.json", self.diagnosis.model_dump())
             if self.diagnosis.regression_test and self.diagnosis.reproducible:
                 self.store.write_text("regression_test.py", self.diagnosis.regression_test.code)
@@ -287,6 +302,9 @@ class Forge:
         self.store.write_json("run.json", meta)
         capsule = assemble_capsule(meta, verification.to_dict() if verification else None, status, summary)
         finalize_run(self.store, capsule, self.repo)
+        self.memory.learn_repo(self.rm)
+        self.memory.record_run(self.repo, capsule)
+        self.memory.save()
         return capsule
 
     def _run_meta(self, dirty: list[str]) -> dict:
@@ -341,6 +359,11 @@ def diff_file_stats(diff: str) -> list[dict]:
     return list(stats.values())
 
 
+def _portable(argv: list[str]) -> list[str]:
+    """Interpreter path -> executable name, so capsules don't leak local directories."""
+    return [PureWindowsPath(argv[0]).name if "\\" in argv[0] else Path(argv[0]).name, *argv[1:]] if argv else argv
+
+
 def assemble_capsule(meta: dict, verification: dict | None, fallback_status: str | None, fallback_summary: str) -> dict:
     from oss_forge.workflows.capsule import ProofOfFixCapsule, build_limitations
     status = verification["status"] if verification else (fallback_status or "INCONCLUSIVE")
@@ -349,11 +372,13 @@ def assemble_capsule(meta: dict, verification: dict | None, fallback_status: str
     evidence = []
     r = meta.get("reproduction")
     if r and r.get("command"):
+        r = {**r, "command": _portable(r["command"])}
         evidence.append({"label": "reproduction", "command": r["command"], "exit_code": r["exit_code"],
                          "duration_s": r["duration_s"], "runner": r["runner"], "output_tail": r["output_tail"]})
     for run in (verification or {}).get("runs", []):
-        evidence.append({k: run[k] for k in ("label", "command", "exit_code", "duration_s", "runner", "passed",
-                                             "failed", "errors", "skipped", "output_tail")})
+        evidence.append({**{k: run[k] for k in ("label", "exit_code", "duration_s", "runner", "passed",
+                                                "failed", "errors", "skipped", "output_tail")},
+                         "command": _portable(run["command"])})
     limitations = build_limitations(status, verification, sandbox)
     if meta.get("dirty_files_ignored"):
         limitations.append("The target checkout had uncommitted changes; they were not part of the analysed commit.")

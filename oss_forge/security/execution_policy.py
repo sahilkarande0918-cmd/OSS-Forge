@@ -31,6 +31,7 @@ SECRET_FILE_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".keystore", ".jks"}
 
 _REDACTIONS = [
     re.compile(r"AIza[0-9A-Za-z_\-]{30,}"),                     # Google API keys
+    re.compile(r"\bAQ\.[0-9A-Za-z_\-]{30,}"),                   # newer Google API key format
     re.compile(r"gh[pousr]_[0-9A-Za-z]{20,}"),                  # GitHub tokens
     re.compile(r"github_pat_[0-9A-Za-z_]{20,}"),
     re.compile(r"sk-[0-9A-Za-z_\-]{20,}"),                      # generic provider keys

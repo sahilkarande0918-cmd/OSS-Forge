@@ -28,35 +28,19 @@ An Agent Skill does not change the host agent's model. Whatever model runs OpenC
 calls the CLI; **the issue analysis, regression tests and patches are always produced by hosted Gemma 4**
 inside the OSS Forge Python tooling (`oss_forge/ai/gemma_provider.py`, `GEMINI_API_KEY`).
 
-## Running OpenCode itself on Gemma 4 (not verified)
+## Running OpenCode itself on Gemma 4
 
-OpenCode's providers are built on the AI SDK. Two configurations that *should* route OpenCode to Gemma 4
-through the Gemini API; neither has been verified by this project, so test before relying on it:
+Verified with OpenCode 1.19.3 (2026-10-18): `opencode debug skill` run in this repository lists `oss-forge`
+from `.agents/skills/oss-forge/SKILL.md`, and `opencode models google` lists `google/gemma-4-26b-a4b-it` and
+`google/gemma-4-31b-it` in the built-in catalog. Configure it with your Gemini key
+(`opencode auth login` → Google, or `GOOGLE_GENERATIVE_AI_API_KEY`) and:
 
-1. Google provider with a custom model id (`GOOGLE_GENERATIVE_AI_API_KEY` set to your Gemini key):
+```json
+{ "$schema": "https://opencode.ai/config.json", "model": "google/gemma-4-26b-a4b-it" }
+```
 
-   ```json
-   {
-     "provider": { "google": { "models": { "gemma-4-26b-a4b-it": { "name": "Gemma 4 26B A4B" } } } },
-     "model": "google/gemma-4-26b-a4b-it"
-   }
-   ```
-
-2. Gemini's OpenAI-compatible endpoint as a custom provider:
-
-   ```json
-   {
-     "provider": {
-       "gemini-openai": {
-         "npm": "@ai-sdk/openai-compatible",
-         "options": { "baseURL": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                      "apiKey": "{env:GEMINI_API_KEY}" },
-         "models": { "gemma-4-26b-a4b-it": {} }
-       }
-     },
-     "model": "gemini-openai/gemma-4-26b-a4b-it"
-   }
-   ```
+**Not yet verified:** an OpenCode session actually running on Gemma 4 and loading/executing the skill end to
+end (requires a configured key). Until verified, treat "OpenCode on Gemma 4" as expected, not confirmed.
 
 Tool-calling quality of the host model matters for orchestration; OSS Forge's own Gemma calls do not use
 function calling (structured JSON with schema validation and repair proved simpler and model-agnostic).
