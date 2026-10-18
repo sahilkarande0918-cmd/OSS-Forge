@@ -66,7 +66,8 @@ def index_python(path: str, source: str) -> FileIndex:
         idx.parse_error = f"{type(exc).__name__}: {exc}"
         return idx
     fname = path.rsplit("/", 1)[-1]
-    is_test_file = fname.startswith("test_") or fname == "conftest.py" or path.endswith("_test.py") \n        or "/tests/" in f"/{path}"
+    is_test_file = fname.startswith("test_") or fname == "conftest.py" or path.endswith("_test.py") \
+        or "/tests/" in f"/{path}"
 
     def calls_in(node: ast.AST) -> list[str]:
         names = {_call_name(n.func) for n in ast.walk(node) if isinstance(n, ast.Call)}
